@@ -2425,7 +2425,7 @@ uint16_t mode_meteor() {
       // Note: Overlay mode uses deterministic decay (ignores intensity gating) for cleaner, more predictable trails
       if (trail[i] > 0) {
         // Decay trail state to prevent stuck pixels
-        if(meteorSmooth) {
+        if (meteorSmooth) {
           int change = trail[i] + 4 - hw_random8(24); //change each time between -20 and +4
           trail[i] = constrain(change, 0, max);
         } else {
@@ -2434,7 +2434,7 @@ uint16_t mode_meteor() {
         // Only render pixels that are part of the trail
         if (trail[i] > 0) {
           uint32_t col;
-          if(meteorSmooth) {
+          if (meteorSmooth) {
             col = SEGMENT.check1 ? SEGMENT.color_from_palette(i, true, false, 0, trail[i]) : SEGMENT.color_from_palette(trail[i], false, true, 255);
           } else {
             int index = trail[i];
@@ -2458,7 +2458,7 @@ uint16_t mode_meteor() {
       const bool doUpdate = (hw_random8() <= 255 - SEGMENT.intensity);
       if (doUpdate) {
         // Random check passed: update/decay trail[i]
-        if(meteorSmooth) {
+        if (meteorSmooth) {
           if (trail[i] > 0) {
             int change = trail[i] + 4 - hw_random8(24); //change each time between -20 and +4
             trail[i] = constrain(change, 0, max);
@@ -2470,7 +2470,7 @@ uint16_t mode_meteor() {
       }
       // ALWAYS render pixel based on current trail[i] value (prevents ghosting, maintains smooth trail)
       uint32_t col;
-      if(meteorSmooth) {
+      if (meteorSmooth) {
         col = SEGMENT.check1 ? SEGMENT.color_from_palette(i, true, false, 0, trail[i]) : SEGMENT.color_from_palette(trail[i], false, true, 255);
       }
       else {
