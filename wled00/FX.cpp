@@ -2405,6 +2405,7 @@ uint16_t mode_meteor() {
   if (SEGLEN <= 1) return mode_static();
   if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
   const bool meteorSmooth = SEGMENT.check3;
+  const bool isOverlay = SEGMENT.check2; // overlay mode: don't write background, only meteor/trail pixels
   byte* trail = SEGENV.data;
 
   const unsigned meteorSize = 1 + SEGLEN / 20; // 5%
@@ -2416,19 +2417,63 @@ uint16_t mode_meteor() {
   }
 
   const int max = SEGMENT.palette==5 || !SEGMENT.check1 ? 240 : 255;
-  // fade all leds to colors[1] in LEDs one step
+  // fade all leds to colors[1] in LEDs one step (or decay trail in overlay mode)
   for (unsigned i = 0; i < SEGLEN; i++) {
-    uint32_t col;
-    if (hw_random8() <= 255 - SEGMENT.intensity) {
-      if(meteorSmooth) {
-        if (trail[i] > 0) {
+    if (isOverlay) {
+      // Overlay mode: only decay trail[i] if > 0, only render if > 0
+      // Never write background colors - colors[1] is ignored entirely
+      // Note: Overlay mode uses deterministic decay (ignores intensity gating) for cleaner, more predictable trails
+      if (trail[i] > 0) {
+        // Decay trail state to prevent stuck pixels
+        if(meteorSmooth) {
           int change = trail[i] + 4 - hw_random8(24); //change each time between -20 and +4
           trail[i] = constrain(change, 0, max);
+        } else {
+          trail[i] = scale8(trail[i], 128 + hw_random8(127));
         }
+        // Only render pixels that are part of the trail
+        if (trail[i] > 0) {
+          uint32_t col;
+          if(meteorSmooth) {
+            col = SEGMENT.check1 ? SEGMENT.color_from_palette(i, true, false, 0, trail[i]) : SEGMENT.color_from_palette(trail[i], false, true, 255);
+          } else {
+            int index = trail[i];
+            int idx = 255;
+            int bri = SEGMENT.palette==35 || SEGMENT.palette==36 ? 255 : trail[i];
+            if (!SEGMENT.check1) {
+              idx = 0;
+              index = map(i,0,SEGLEN,0,max);
+              bri = trail[i];
+            }
+            col = SEGMENT.color_from_palette(index, false, false, idx, bri);  // full brightness for Fire
+          }
+          SEGMENT.setPixelColor(i, col);
+        }
+        // If trail[i] reached 0 after decay, don't write (transparent by omission)
+      }
+      // If trail[i] == 0, don't write anything (transparent)
+    } else {
+      // Normal mode: existing behavior - fade all pixels toward colors[1]
+      // Random gating controls trail decay/update, but we always render to prevent ghosting
+      const bool doUpdate = (hw_random8() <= 255 - SEGMENT.intensity);
+      if (doUpdate) {
+        // Random check passed: update/decay trail[i]
+        if(meteorSmooth) {
+          if (trail[i] > 0) {
+            int change = trail[i] + 4 - hw_random8(24); //change each time between -20 and +4
+            trail[i] = constrain(change, 0, max);
+          }
+        }
+        else {
+          trail[i] = scale8(trail[i], 128 + hw_random8(127));
+        }
+      }
+      // ALWAYS render pixel based on current trail[i] value (prevents ghosting, maintains smooth trail)
+      uint32_t col;
+      if(meteorSmooth) {
         col = SEGMENT.check1 ? SEGMENT.color_from_palette(i, true, false, 0, trail[i]) : SEGMENT.color_from_palette(trail[i], false, true, 255);
       }
       else {
-        trail[i] = scale8(trail[i], 128 + hw_random8(127));
         int index = trail[i];
         int idx = 255;
         int bri = SEGMENT.palette==35 || SEGMENT.palette==36 ? 255 : trail[i];
@@ -2466,7 +2511,7 @@ uint16_t mode_meteor() {
   SEGENV.step += SEGMENT.speed +1;
   return FRAMETIME;
 }
-static const char _data_FX_MODE_METEOR[] PROGMEM = "Meteor@!,Trail,,,,Gradient,,Smooth;;!;1";
+static const char _data_FX_MODE_METEOR[] PROGMEM = "Meteor@!,Trail,,,,Gradient,Overlay,Smooth;;!;1";
 
 
 //Railway Crossing / Christmas Fairy lights
